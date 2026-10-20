@@ -1,40 +1,24 @@
-// Input Buffer — Geode mod for Geometry Dash 2.2081 (Geode v5)
+// Input Buffer v1.1 — Geode mod for Geometry Dash 2.2081 (Geode v5)
 //
-// What it does:
-//   When you tap the jump button, the release is held back until the press has
-//   lasted at least N physics ticks. That way a slightly-early or very short tap
-//   (e.g. tapping just before a cube lands, or a 1-tick wave flick) still counts.
+// When you tap jump, the release is held back until the press has lasted at
+// least N physics ticks, so slightly-early or very short taps still count.
+// GD simulates 240 ticks per second: 4 ticks = 1 frame at 60 fps.
 //
-//   GD simulates 240 ticks per second, so 4 ticks == 1 frame at 60 fps.
-//
-//   Press F6 inside a level to cycle stages:
-//     STAGE 1:  2 ticks all |  2 ticks wave
-//     STAGE 2:  4 ticks all |  4 ticks wave
-//     STAGE 3:  8 ticks all |  8 ticks wave
-//     STAGE 4: 16 ticks all |  8 ticks wave
-//     STAGE 5: OFF (raw input)
+// Controls:
+//   - Pause menu -> clock button (right side) opens the settings menu (on/off, tick counts,
+//     which gamemodes are buffered). Changes apply instantly.
+//   - F6 in a level toggles the buffer on/off.
 
 #include <Geode/Geode.hpp>
+#include <Geode/ui/GeodeUI.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/PauseLayer.hpp>
 #include <Geode/modify/CCKeyboardDispatcher.hpp>
 
 using namespace geode::prelude;
 
 namespace {
-    struct Stage {
-        int allTicks;
-        int waveTicks;
-    };
-
-    constexpr std::array<Stage, 5> STAGES {{
-        { 2,  2},
-        { 4,  4},
-        { 8,  8},
-        {16,  8},
-        { 0,  0}, // OFF
-    }};
-
     // Per-player buffer state (index 0 = player 1, 1 = player 2)
     struct PlayerBuffer {
         bool held = false;           // logical state we've sent to the game
@@ -43,10 +27,16 @@ namespace {
         uint64_t releaseAtTick = 0;
     };
 
-    int g_stage = 0;                 // index into STAGES
     uint64_t g_tick = 0;             // our own physics-step counter
     PlayerBuffer g_buf[2];
     bool g_bypass = false;           // true while we inject a release ourselves
+
+    template <class T>
+    T setting(std::string_view key) {
+        return Mod::get()->getSettingValue<T>(key);
+    }
+
+    bool enabled() { return setting<bool>("enabled"); }
 
     void resetBuffers() {
         g_tick = 0;
@@ -54,34 +44,55 @@ namespace {
         g_buf[1] = {};
     }
 
-    std::string stageText(int idx) {
-        auto const& s = STAGES[idx];
-        if (s.allTicks == 0) return fmt::format("STAGE {}: OFF (100% Raw Input)", idx + 1);
+    // Send any held-back releases to the game right now.
+    void flushPending(GJBaseGameLayer* layer) {
+        if (!layer) return;
+        for (int i = 0; i < 2; i++) {
+            if (g_buf[i].releasePending) {
+                g_buf[i] = {};
+                g_bypass = true;
+                layer->handleButton(false, 1, i == 0);
+                g_bypass = false;
+            }
+        }
+    }
+
+    // How many ticks to buffer for this player's current gamemode (0 = none).
+    int minTicksFor(PlayerObject* p) {
+        if (!p) return 0;
+        char const* modeKey = "mode-cube";
+        if (p->m_isShip)        modeKey = "mode-ship";
+        else if (p->m_isBall)   modeKey = "mode-ball";
+        else if (p->m_isBird)   modeKey = "mode-ufo";
+        else if (p->m_isDart)   modeKey = "mode-wave";
+        else if (p->m_isRobot)  modeKey = "mode-robot";
+        else if (p->m_isSpider) modeKey = "mode-spider";
+        else if (p->m_isSwing)  modeKey = "mode-swing";
+
+        if (!setting<bool>(modeKey)) return 0;
+        auto ticks = p->m_isDart ? setting<int64_t>("ticks-wave") : setting<int64_t>("ticks-all");
+        return static_cast<int>(std::max<int64_t>(ticks, 0));
+    }
+
+    std::string statusText() {
+        if (!enabled()) return "Input Buffer: OFF (raw input)";
+        auto all = setting<int64_t>("ticks-all");
+        auto wave = setting<int64_t>("ticks-wave");
         return fmt::format(
-            "STAGE {}: {} Ticks All | {} Ticks Wave ({:.1f}f @ 60fps)",
-            idx + 1, s.allTicks, s.waveTicks, s.waveTicks / 4.0
+            "Input Buffer: ON | {} ticks all ({:.1f}f) | {} ticks wave ({:.1f}f)",
+            all, all / 4.0, wave, wave / 4.0
         );
     }
 }
 
 $execute {
-    auto start = Mod::get()->getSettingValue<int64_t>("default-stage");
-    g_stage = std::clamp<int>(static_cast<int>(start) - 1, 0, STAGES.size() - 1);
-    log::info("[InputBuffer] Loaded. Starting {}", stageText(g_stage));
-    log::info("[InputBuffer] Press F6 in-level to cycle: 2/2 -> 4/4 -> 8/8 -> 16/8 -> OFF");
+    log::info("[InputBuffer] Loaded. {}", statusText());
 }
 
 class $modify(BufferedGameLayer, GJBaseGameLayer) {
-    int minTicksFor(bool isPlayer1) {
-        auto const& s = STAGES[g_stage];
-        PlayerObject* p = isPlayer1 ? m_player1 : m_player2;
-        bool wave = p && p->m_isDart;
-        return wave ? s.waveTicks : s.allTicks;
-    }
-
     void handleButton(bool down, int button, bool isPlayer1) {
         // Only buffer the main jump button. Platformer left/right pass through.
-        if (g_bypass || button != 1 || STAGES[g_stage].allTicks == 0) {
+        if (g_bypass || button != 1 || !enabled()) {
             GJBaseGameLayer::handleButton(down, button, isPlayer1);
             return;
         }
@@ -108,7 +119,7 @@ class $modify(BufferedGameLayer, GJBaseGameLayer) {
             return;
         }
 
-        uint64_t minHold = static_cast<uint64_t>(this->minTicksFor(isPlayer1));
+        auto minHold = static_cast<uint64_t>(minTicksFor(isPlayer1 ? m_player1 : m_player2));
         uint64_t heldFor = g_tick - b.pressTick;
 
         if (heldFor < minHold) {
@@ -151,28 +162,45 @@ class $modify(PlayLayer) {
     }
 };
 
+// Settings button in the pause menu
+class $modify(BufferPauseLayer, PauseLayer) {
+    void customSetup() {
+        PauseLayer::customSetup();
+
+        auto menu = this->getChildByID("right-button-menu");
+        if (!menu) return;
+
+        CCNode* sprite = CircleButtonSprite::createWithSpriteFrameName(
+            "GJ_timeIcon_001.png", 1.0f, CircleBaseColor::Green, CircleBaseSize::Small
+        );
+        if (!sprite) {
+            sprite = ButtonSprite::create("IB");
+            sprite->setScale(0.7f);
+        }
+        auto btn = CCMenuItemSpriteExtra::create(
+            sprite, this, menu_selector(BufferPauseLayer::onBufferSettings)
+        );
+        btn->setID("input-buffer-settings"_spr);
+        menu->addChild(btn);
+        menu->updateLayout();
+    }
+
+    void onBufferSettings(CCObject*) {
+        openSettingsPopup(Mod::get(), false);
+    }
+};
+
+// F6 = quick on/off toggle
 class $modify(CCKeyboardDispatcher) {
     bool dispatchKeyboardMSG(enumKeyCodes key, bool isKeyDown, bool isKeyRepeat, double timestamp) {
         if (key == enumKeyCodes::KEY_F6 && isKeyDown && !isKeyRepeat && PlayLayer::get()) {
-            g_stage = (g_stage + 1) % STAGES.size();
+            bool now = !enabled();
+            Mod::get()->setSettingValue<bool>("enabled", now);
+            if (!now) flushPending(PlayLayer::get());
 
-            // If we just turned it off, flush any pending releases right away.
-            if (STAGES[g_stage].allTicks == 0) {
-                if (auto pl = PlayLayer::get()) {
-                    for (int i = 0; i < 2; i++) {
-                        if (g_buf[i].releasePending) {
-                            g_buf[i] = {};
-                            g_bypass = true;
-                            pl->handleButton(false, 1, i == 0);
-                            g_bypass = false;
-                        }
-                    }
-                }
-            }
-
-            auto text = stageText(g_stage);
-            log::info("[InputBuffer] F6 Cycle -> {}", text);
-            if (Mod::get()->getSettingValue<bool>("show-notifications")) {
+            auto text = statusText();
+            log::info("[InputBuffer] F6 -> {}", text);
+            if (setting<bool>("show-notifications")) {
                 Notification::create(text, NotificationIcon::Info, 1.0f)->show();
             }
             return true;
