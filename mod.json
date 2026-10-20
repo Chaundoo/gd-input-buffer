@@ -1,0 +1,28 @@
+{
+	"geode": "5.9.0",
+	"gd": {
+		"win": "2.2081",
+		"mac": "2.2081",
+		"android": "2.2081"
+	},
+	"id": "ryanvang.input-buffer",
+	"name": "Input Buffer",
+	"version": "v1.0.0",
+	"developer": "Ryan Vang",
+	"description": "Keeps short taps held for a minimum number of ticks so early/quick clicks still register. Press F6 in a level to cycle stages.",
+	"settings": {
+		"default-stage": {
+			"type": "int",
+			"name": "Starting Stage",
+			"description": "1 = 2/2, 2 = 4/4, 3 = 8/8, 4 = 16/8, 5 = OFF (ticks All / ticks Wave)",
+			"default": 1,
+			"min": 1,
+			"max": 5
+		},
+		"show-notifications": {
+			"type": "bool",
+			"name": "Show Stage Popup",
+			"default": true
+		}
+	}
+}
