@@ -7,21 +7,101 @@
 	},
 	"id": "ryanvang.input-buffer",
 	"name": "Input Buffer",
-	"version": "v1.0.0",
+	"version": "v1.1.0",
 	"developer": "Ryan Vang",
-	"description": "Keeps short taps held for a minimum number of ticks so early/quick clicks still register. Press F6 in a level to cycle stages.",
+	"description": "Keeps short taps held for a minimum number of ticks so early/quick clicks still register. Settings button in the pause menu, F6 toggles on/off.",
 	"settings": {
-		"default-stage": {
+		"enabled": {
+			"type": "bool",
+			"name": "Enable Input Buffer",
+			"description": "Master on/off switch. F6 in a level also toggles this.",
+			"default": true
+		},
+		"ticks-all": {
 			"type": "int",
-			"name": "Starting Stage",
-			"description": "1 = 2/2, 2 = 4/4, 3 = 8/8, 4 = 16/8, 5 = OFF (ticks All / ticks Wave)",
-			"default": 1,
-			"min": 1,
-			"max": 5
+			"name": "Buffer Ticks (All Modes)",
+			"description": "Minimum ticks a tap is held, for every mode except wave. 240 ticks = 1 second, 4 ticks = 1 frame at 60 fps. Very high values (40+) can cause cube/robot to jump again when landing.",
+			"default": 4,
+			"min": 0,
+			"max": 120,
+			"control": {
+				"arrows": true,
+				"arrow-step": 1,
+				"big-arrows": true,
+				"big-arrow-step": 4,
+				"slider": true,
+				"slider-step": 1,
+				"input": true
+			}
+		},
+		"ticks-wave": {
+			"type": "int",
+			"name": "Buffer Ticks (Wave)",
+			"description": "Minimum ticks a tap is held while in wave. Keep this low, longer taps change the wave's path.",
+			"default": 2,
+			"min": 0,
+			"max": 120,
+			"control": {
+				"arrows": true,
+				"arrow-step": 1,
+				"big-arrows": true,
+				"big-arrow-step": 4,
+				"slider": true,
+				"slider-step": 1,
+				"input": true
+			}
+		},
+		"modes-title": {
+			"type": "title",
+			"name": "Buffered Gamemodes"
+		},
+		"mode-cube": {
+			"type": "bool",
+			"name": "Cube",
+			"default": true
+		},
+		"mode-ship": {
+			"type": "bool",
+			"name": "Ship",
+			"default": false
+		},
+		"mode-ball": {
+			"type": "bool",
+			"name": "Ball",
+			"default": true
+		},
+		"mode-ufo": {
+			"type": "bool",
+			"name": "UFO",
+			"default": true
+		},
+		"mode-wave": {
+			"type": "bool",
+			"name": "Wave",
+			"default": true
+		},
+		"mode-robot": {
+			"type": "bool",
+			"name": "Robot",
+			"default": true
+		},
+		"mode-spider": {
+			"type": "bool",
+			"name": "Spider",
+			"default": true
+		},
+		"mode-swing": {
+			"type": "bool",
+			"name": "Swing",
+			"default": true
+		},
+		"misc-title": {
+			"type": "title",
+			"name": "Other"
 		},
 		"show-notifications": {
 			"type": "bool",
-			"name": "Show Stage Popup",
+			"name": "Show Popup on F6",
 			"default": true
 		}
 	}
